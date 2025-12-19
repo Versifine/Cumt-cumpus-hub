@@ -1,45 +1,43 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+## 项目结构与模块组织
 
-This repository is documentation-first. The only source of truth lives under `docs/`.
-Key references include `docs/spec.md` for the product and architecture plan,
-`docs/api.md` for REST details, `docs/ws-protocol.md` for WebSocket events, and
-`docs/decision-log.md` for decisions. The spec describes future folders like
-`server/` and `apps/`, but they are not present in this repo today.
+本仓库以文档为主，核心内容在 `docs/`。主要文件包括：`docs/spec.md`
+（产品与架构规划）、`docs/api.md`（REST 设计）、`docs/ws-protocol.md`
+（WebSocket 协议）、`docs/decision-log.md`（关键决策记录）。
+`docs/spec.md` 中提到的 `server/`、`apps/` 等目录目前未出现在仓库内。
 
-## Build, Test, and Development Commands
+## 构建、测试与本地开发命令
 
-There are no build or runtime commands checked in. Workflows are manual:
-- Edit Markdown files in `docs/`.
-- Preview Markdown in your editor (VS Code settings live in `docs/.vscode/settings.json`).
-If you introduce tooling later, update this section with exact commands.
+当前没有内置构建或运行脚本，也没有固定的 `npm test`、`go test` 命令。
+日常工作以编辑与审阅 Markdown 为主，建议在编辑器中预览渲染效果；
+相关设置在 `docs/.vscode/settings.json`。若后续引入工具链，请在此处
+补充命令示例与作用说明。
 
-## Coding Style & Naming Conventions
+## 代码风格与命名约定
 
-- Markdown is the primary format. Prefer clear headings and short paragraphs.
-- File names in `docs/` use kebab-case (for example, `decision-log.md`).
-- Keep sections scoped and descriptive; avoid drifting from the spec structure.
-- HTML in Markdown is acceptable where needed (markdownlint MD033 is disabled),
-  but prefer standard Markdown for consistency.
+- 文档采用 Markdown，标题清晰、段落简短。
+- `docs/` 下文件名使用 kebab-case，例如 `decision-log.md`。
+- 能用标准 Markdown 就不用 HTML；如必须使用，请保持结构简洁。
+- `markdownlint` 配置已在 `docs/.vscode/settings.json` 中指定。
 
-## Testing Guidelines
+## 测试指南
 
-No automated tests are defined. Validate changes by:
-- Reviewing rendered Markdown.
-- Checking that cross-references are accurate and up to date.
-If you add linting or tests, document the exact command and expected output.
+暂无自动化测试。变更后请自行检查：
+- 预览渲染是否正常。
+- 文档间的引用、协议字段是否一致。
+若新增测试或校验脚本，请补充运行方式与预期输出。
 
-## Commit & Pull Request Guidelines
+## 提交与拉取请求规范
 
-This copy of the repository does not include Git history, so no commit message
-convention can be inferred. If you are committing in an initialized repo, align
-with the team standard and keep messages short and imperative.
-For pull requests, include a concise summary, note any spec or protocol changes,
-and link relevant decisions in `docs/decision-log.md`.
+此仓库未包含 Git 历史，无法推断既有提交格式。提交信息请遵循团队约定，
+保持简短、动词开头。PR 需包含变更摘要、影响到的文档范围，并在涉及
+协议或 API 变更时同步更新 `docs/decision-log.md`。
 
-## Documentation Workflow
+## 文档更新流程
 
-When updating specs or protocols, keep related documents in sync:
-for example, an API change in `docs/api.md` should also be reflected in
-`docs/spec.md` and `docs/ws-protocol.md` if applicable.
+对 `docs/api.md` 或 `docs/ws-protocol.md` 的修改，通常需要同步更新
+`docs/spec.md`。保持文档之间的术语与字段一致，避免引入相互矛盾的描述。
+
+
+## 尽量用中文回复
