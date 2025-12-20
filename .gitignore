@@ -1,5 +1,72 @@
-.cache/
+# ===== OS / 通用 =====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ===== 编辑器 / IDE =====
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+.idea/
+*.iml
+
+# ===== 日志 / 临时文件 =====
 *.log
-server/storage/
-storage/
-*.go.*
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*~
+
+# ===== 依赖与构建产物（如后续引入）=====
+node_modules/
+dist/
+build/
+out/
+coverage/
+.nyc_output/
+.eslintcache
+
+# ===== TypeScript / JS =====
+*.tsbuildinfo
+
+# ===== Go（如后续引入）=====
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# ===== Python（如后续引入）=====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# ===== 环境变量 / 密钥 =====
+.env
+.env.*
+!.env.example
+
+# ===== 压缩包 / 导出文件 =====
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# ===== 运行时数据（如后续引入）=====
+data/
+tmp/
+.cache/
+
+# ===== 其他 =====
+AGENTS.md

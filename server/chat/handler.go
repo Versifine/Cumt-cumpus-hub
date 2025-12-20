@@ -11,10 +11,11 @@ import (
 )
 
 type Handler struct {
-	Store *store.Store
+	Store store.API
 	Hub   *Hub
 }
 
+// Client represents a single WebSocket connection to a specific user.
 type Client struct {
 	Conn *websocket.Conn
 	User store.User
@@ -36,9 +37,11 @@ type wsError struct {
 }
 
 var upgrader = websocket.Upgrader{
+	// Demo mode: allow all origins. Tighten this in production.
 	CheckOrigin: func(_ *http.Request) bool { return true },
 }
 
+// ServeWS handles GET /ws/chat and upgrades the connection to WebSocket.
 func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
@@ -172,6 +175,7 @@ func (c *Client) writeLoop() {
 	}
 }
 
+// sendEnvelope marshals and sends a success event to the client.
 func (c *Client) sendEnvelope(eventType string, requestID string, data any) {
 	encoded, err := marshalEnvelope(1, eventType, requestID, data, nil)
 	if err != nil {
@@ -180,6 +184,7 @@ func (c *Client) sendEnvelope(eventType string, requestID string, data any) {
 	c.Send <- encoded
 }
 
+// sendError marshals and sends an error event to the client.
 func (c *Client) sendError(requestID string, code int, message string) {
 	encoded, err := marshalEnvelope(1, "error", requestID, nil, &wsError{Code: code, Message: message})
 	if err != nil {
@@ -188,6 +193,7 @@ func (c *Client) sendError(requestID string, code int, message string) {
 	c.Send <- encoded
 }
 
+// marshalEnvelope builds the protocol envelope used by docs/ws-protocol.md.
 func marshalEnvelope(version int, eventType string, requestID string, data any, errPayload *wsError) ([]byte, error) {
 	var raw json.RawMessage
 	if data != nil {

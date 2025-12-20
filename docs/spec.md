@@ -1,4 +1,4 @@
-# docs/spec.md — campus-hub 规格说明（v0.1）
+# docs/spec.md — campus-hub 规格说明（v0.2）
 
 > Repo（暂定）：campus-hub
 >
@@ -42,7 +42,7 @@
 * 后端：Go（REST API + WebSocket）
 * 客户端（阶段性）：
 
-  * Phase A：Web（验证产品与交互）
+  * Phase A：Web（Vue 3 + TypeScript + Vite + Naive UI，用于验证产品与交互）
   * Phase C：Kotlin Multiplatform（长期客户端）
 
 ---
@@ -51,7 +51,7 @@
 
 ### 3.1 用户与认证
 
-* 基础登录（账号 + token）
+* 注册/登录（账号 + 密码 + token）
 * 用户昵称 / 基础资料
 * 前端匿名展示（非强匿名）
 
@@ -60,7 +60,11 @@
 * 版块（Boards）
 * 帖子（Posts）
 * 评论（Comments）
-* 点赞 / 基础互动（Reactions）
+* 楼中楼评论（parent_id）
+* 点赞 / 点踩 / 分值（Reactions，需持久化）
+* 评论按钮 + 评论数展示
+* Award（消耗用户资源，规则待后端设计）
+* 分享（复制链接为主，后续可扩展）
 
 ### 3.3 实时聊天
 
@@ -98,14 +102,29 @@
 * title
 * content
 * created_at
+* score（分值，默认 0，后端持久化）
+* comment_count（评论数）
+* award_count（奖励数）
+* my_vote（当前用户对该帖的投票：-1 / 0 / 1，可选字段）
+
+### 4.8 PostVote
+
+* id
+* post_id
+* user_id
+* value（-1 / 1）
+* created_at
 
 ### 4.4 Comment
 
 * id
 * post_id
+* parent_id
 * author_id
 * content
 * created_at
+* score
+* my_vote
 
 ### 4.5 ChatRoom
 
@@ -176,7 +195,7 @@ campus-hub/
     main.go
 
   apps/
-    web/
+    web/   # Vue 3 + TypeScript + Vite + Naive UI
     kmp/   # Phase C
 ```
 
@@ -189,6 +208,7 @@ campus-hub/
 * API / WS 协议初版冻结
 * 功能闭环跑通
 * 基础 UI 与交互完成
+* Web 前端技术栈：Vue 3 + TypeScript + Vite + Naive UI
 
 ### Phase B：工程加固
 

@@ -9,7 +9,7 @@ import (
 )
 
 type Service struct {
-	Store *store.Store
+	Store store.API
 }
 
 type loginRequest struct {
@@ -27,6 +27,44 @@ type userResponse struct {
 	Nickname string `json:"nickname"`
 }
 
+// RegisterHandler handles POST /api/v1/auth/register.
+func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		transport.WriteError(w, http.StatusMethodNotAllowed, 2001, "method not allowed")
+		return
+	}
+
+	var req loginRequest
+	if err := transport.ReadJSON(r, &req); err != nil {
+		transport.WriteError(w, http.StatusBadRequest, 2001, "invalid json")
+		return
+	}
+
+	token, user, err := s.Store.Register(req.Account, req.Password)
+	if err != nil {
+		switch err {
+		case store.ErrInvalidInput:
+			transport.WriteError(w, http.StatusBadRequest, 2001, "missing fields")
+		case store.ErrAccountExists:
+			transport.WriteError(w, http.StatusConflict, 1004, "account already exists")
+		default:
+			transport.WriteError(w, http.StatusInternalServerError, 5000, "server error")
+		}
+		return
+	}
+
+	resp := loginResponse{
+		Token: token,
+		User: userResponse{
+			ID:       user.ID,
+			Nickname: user.Nickname,
+		},
+	}
+
+	transport.WriteJSON(w, http.StatusOK, resp)
+}
+
+// LoginHandler handles POST /api/v1/auth/login.
 func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		transport.WriteError(w, http.StatusMethodNotAllowed, 2001, "method not allowed")
@@ -39,7 +77,18 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, user := s.Store.Login(req.Account)
+	token, user, err := s.Store.Login(req.Account, req.Password)
+	if err != nil {
+		switch err {
+		case store.ErrInvalidInput:
+			transport.WriteError(w, http.StatusBadRequest, 2001, "missing fields")
+		case store.ErrInvalidCredentials:
+			transport.WriteError(w, http.StatusUnauthorized, 1003, "invalid credentials")
+		default:
+			transport.WriteError(w, http.StatusInternalServerError, 5000, "server error")
+		}
+		return
+	}
 	resp := loginResponse{
 		Token: token,
 		User: userResponse{
@@ -51,6 +100,7 @@ func (s *Service) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	transport.WriteJSON(w, http.StatusOK, resp)
 }
 
+// MeHandler handles GET /api/v1/users/me.
 func (s *Service) MeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		transport.WriteError(w, http.StatusMethodNotAllowed, 2001, "method not allowed")
@@ -75,6 +125,7 @@ func (s *Service) MeHandler(w http.ResponseWriter, r *http.Request) {
 	transport.WriteJSON(w, http.StatusOK, resp)
 }
 
+// RequireUser extracts the Bearer token, loads the user, and writes a 401 error on failure.
 func (s *Service) RequireUser(w http.ResponseWriter, r *http.Request) (store.User, bool) {
 	token := bearerToken(r)
 	if token == "" {
@@ -90,6 +141,7 @@ func (s *Service) RequireUser(w http.ResponseWriter, r *http.Request) (store.Use
 	return user, true
 }
 
+// bearerToken parses Authorization: Bearer <token>.
 func bearerToken(r *http.Request) string {
 	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
 	if authHeader == "" {

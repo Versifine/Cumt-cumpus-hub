@@ -15,11 +15,12 @@ import (
 )
 
 type Handler struct {
-	Store     *store.Store
+	Store     store.API
 	Auth      *auth.Service
 	UploadDir string
 }
 
+// Upload handles POST /api/v1/files (multipart/form-data, field name: file).
 func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		transport.WriteError(w, http.StatusMethodNotAllowed, 2001, "method not allowed")
@@ -84,6 +85,7 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 	transport.WriteJSON(w, http.StatusOK, resp)
 }
 
+// Download returns a handler for GET /files/{file_id}.
 func (h *Handler) Download(fileID string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -106,6 +108,7 @@ func (h *Handler) Download(fileID string) http.HandlerFunc {
 	}
 }
 
+// sanitizeFilename strips directory components and trims whitespace to prevent path traversal.
 func sanitizeFilename(name string) string {
 	cleaned := strings.ReplaceAll(name, "\\", "/")
 	cleaned = filepath.Base(cleaned)

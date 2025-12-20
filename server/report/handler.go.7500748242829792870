@@ -1,0 +1,149 @@
+package report
+
+import (
+	"net/http"
+	"os"
+	"strings"
+
+	"github.com/Versifine/Cumt-cumpus-hub/server/auth"
+	"github.com/Versifine/Cumt-cumpus-hub/server/internal/transport"
+	"github.com/Versifine/Cumt-cumpus-hub/server/store"
+)
+
+type Handler struct {
+	Store store.API
+	Auth  *auth.Service
+}
+
+func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		transport.WriteError(w, http.StatusMethodNotAllowed, 2001, "method not allowed")
+		return
+	}
+
+	user, ok := h.Auth.RequireUser(w, r)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		TargetType string `json:"target_type"`
+		TargetID   string `json:"target_id"`
+		Reason     string `json:"reason"`
+		Detail     string `json:"detail"`
+	}
+	if err := transport.ReadJSON(r, &req); err != nil {
+		transport.WriteError(w, http.StatusBadRequest, 2001, "invalid json")
+		return
+	}
+
+	report, err := h.Store.CreateReport(user.ID, req.TargetType, req.TargetID, req.Reason, req.Detail)
+	if err != nil {
+		switch err {
+		case store.ErrInvalidInput:
+			transport.WriteError(w, http.StatusBadRequest, 2001, "missing fields")
+		default:
+			transport.WriteError(w, http.StatusInternalServerError, 5000, "server error")
+		}
+		return
+	}
+
+	resp := map[string]any{
+		"id":         report.ID,
+		"status":     report.Status,
+		"created_at": report.CreatedAt,
+	}
+	transport.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) AdminList(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		transport.WriteError(w, http.StatusMethodNotAllowed, 2001, "method not allowed")
+		return
+	}
+
+	user, ok := h.Auth.RequireUser(w, r)
+	if !ok {
+		return
+	}
+	if !isAdmin(user) {
+		transport.WriteError(w, http.StatusForbidden, 1002, "forbidden")
+		return
+	}
+
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	page := 1
+	pageSize := 20
+
+	items, total, err := h.Store.Reports(status, page, pageSize)
+	if err != nil {
+		transport.WriteError(w, http.StatusInternalServerError, 5000, "server error")
+		return
+	}
+
+	resp := map[string]any{
+		"items": items,
+		"total": total,
+	}
+	transport.WriteJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) AdminUpdate(reportID string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			transport.WriteError(w, http.StatusMethodNotAllowed, 2001, "method not allowed")
+			return
+		}
+
+		user, ok := h.Auth.RequireUser(w, r)
+		if !ok {
+			return
+		}
+		if !isAdmin(user) {
+			transport.WriteError(w, http.StatusForbidden, 1002, "forbidden")
+			return
+		}
+
+		var req struct {
+			Status string `json:"status"`
+			Action string `json:"action"`
+			Note   string `json:"note"`
+		}
+		if err := transport.ReadJSON(r, &req); err != nil {
+			transport.WriteError(w, http.StatusBadRequest, 2001, "invalid json")
+			return
+		}
+
+		updated, err := h.Store.UpdateReport(reportID, req.Status, req.Action, req.Note, user.ID)
+		if err != nil {
+			switch err {
+			case store.ErrInvalidInput:
+				transport.WriteError(w, http.StatusBadRequest, 2001, "missing fields")
+			case store.ErrNotFound:
+				transport.WriteError(w, http.StatusNotFound, 2001, "not found")
+			default:
+				transport.WriteError(w, http.StatusInternalServerError, 5000, "server error")
+			}
+			return
+		}
+		transport.WriteJSON(w, http.StatusOK, updated)
+	}
+}
+
+func isAdmin(user store.User) bool {
+	raw := strings.TrimSpace(os.Getenv("ADMIN_ACCOUNTS"))
+	if raw == "" {
+		return false
+	}
+	parts := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ';' || r == ' ' || r == '\t' || r == '\n' })
+	for _, part := range parts {
+		if strings.TrimSpace(part) == "" {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(part), user.Nickname) {
+			return true
+		}
+	}
+	return false
+}
+
