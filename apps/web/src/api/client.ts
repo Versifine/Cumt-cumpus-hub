@@ -1,3 +1,5 @@
+﻿import { clearAuth, getToken, setAuthMessage } from '../store/auth'
+
 export type ApiErrorPayload = {
   code: number
   message: string
@@ -43,6 +45,18 @@ const parseError = async (response: Response): Promise<ApiError> => {
   })
 }
 
+const dispatchAuthFailure = () => {
+  clearAuth()
+  setAuthMessage('登录失效')
+  const from = `${window.location.pathname}${window.location.search}`
+
+  window.dispatchEvent(
+    new CustomEvent('auth:invalid', {
+      detail: { from },
+    }),
+  )
+}
+
 export const apiRequest = async <T>(
   path: string,
   options: RequestInit & { token?: string } = {},
@@ -50,15 +64,19 @@ export const apiRequest = async <T>(
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   const url = path.startsWith('/api/') ? path : `${API_PREFIX}${normalizedPath}`
   const headers = new Headers(options.headers)
+  const token = options.token ?? getToken()
 
   headers.set('Accept', 'application/json')
 
-  if (options.body && !headers.has('Content-Type')) {
+  const isFormData =
+    typeof FormData !== 'undefined' && options.body instanceof FormData
+
+  if (options.body && !headers.has('Content-Type') && !isFormData) {
     headers.set('Content-Type', 'application/json')
   }
 
-  if (options.token) {
-    headers.set('Authorization', `Bearer ${options.token}`)
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`)
   }
 
   const response = await fetch(url, {
@@ -67,7 +85,13 @@ export const apiRequest = async <T>(
   })
 
   if (!response.ok) {
-    throw await parseError(response)
+    const apiError = await parseError(response)
+
+    if (response.status === 401 || apiError.code === 1001) {
+      dispatchAuthFailure()
+    }
+
+    throw apiError
   }
 
   return response.json() as Promise<T>

@@ -36,6 +36,12 @@ type API interface {
 	GetComment(postID, commentID string) (Comment, bool)
 	CreateComment(postID, authorID, content string) Comment
 	SoftDeleteComment(postID, commentID, actorUserID string) error
+	CommentCount(postID string) int
+
+	PostScore(postID string) int
+	PostVote(postID, userID string) int
+	VotePost(postID, userID string, value int) (int, int, error)
+	ClearPostVote(postID, userID string) (int, int, error)
 
 	SaveFile(uploaderID, filename, storageKey, storagePath string) FileMeta
 	GetFile(fileID string) (FileMeta, bool)
@@ -50,9 +56,9 @@ type API interface {
 
 // Board is a simple forum category in the demo community module.
 type Board struct {
-	ID          string
-	Name        string
-	Description string
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // Post is a forum post stored in memory for the demo.
@@ -121,6 +127,7 @@ type Store struct {
 	boards      []Board
 	posts       []Post
 	comments    []Comment
+	postVotes   map[string]map[string]int
 	files       map[string]FileMeta
 	messages    map[string][]ChatMessage
 	reports     []Report
@@ -140,15 +147,20 @@ func NewStore() *Store {
 		passwords:  map[string]string{},
 		tokens:     map[string]string{},
 		userTokens: map[string]string{},
-		boards: []Board{
-			{ID: "b_1", Name: "General", Description: "General discussion"},
-			{ID: "b_2", Name: "Marketplace", Description: "Buy and sell"},
-			{ID: "b_3", Name: "Resources", Description: "Study resources"},
-		},
-		posts:    []Post{},
-		comments: []Comment{},
-		files:    map[string]FileMeta{},
-		messages: map[string][]ChatMessage{},
+		boards:     defaultBoards(),
+		posts:      []Post{},
+		comments:   []Comment{},
+		postVotes:  map[string]map[string]int{},
+		files:      map[string]FileMeta{},
+		messages:   map[string][]ChatMessage{},
+	}
+}
+
+func defaultBoards() []Board {
+	return []Board{
+		{ID: "b_1", Name: "综合", Description: "综合讨论"},
+		{ID: "b_2", Name: "二手", Description: "二手交易"},
+		{ID: "b_3", Name: "吐槽", Description: "吐槽集中营"},
 	}
 }
 
@@ -343,6 +355,90 @@ func (s *Store) SoftDeleteComment(postID, commentID, actorUserID string) error {
 	return ErrNotFound
 }
 
+// CommentCount returns the number of non-deleted comments for a post.
+func (s *Store) CommentCount(postID string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := 0
+	for _, comment := range s.comments {
+		if comment.PostID == postID && comment.DeletedAt == "" {
+			count++
+		}
+	}
+	return count
+}
+
+// PostScore returns the aggregated vote score for a post.
+func (s *Store) PostScore(postID string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.postExists(postID) {
+		return 0
+	}
+	return sumVotes(s.postVotes[postID])
+}
+
+// PostVote returns the current user's vote value (-1/0/1) on a post.
+func (s *Store) PostVote(postID, userID string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if userID == "" {
+		return 0
+	}
+	votes := s.postVotes[postID]
+	if votes == nil {
+		return 0
+	}
+	return votes[userID]
+}
+
+// VotePost upserts a user's vote on a post and returns the new score and my_vote.
+func (s *Store) VotePost(postID, userID string, value int) (int, int, error) {
+	if value != 1 && value != -1 {
+		return 0, 0, ErrInvalidInput
+	}
+	if strings.TrimSpace(userID) == "" {
+		return 0, 0, ErrInvalidInput
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.postExists(postID) {
+		return 0, 0, ErrNotFound
+	}
+
+	if s.postVotes[postID] == nil {
+		s.postVotes[postID] = map[string]int{}
+	}
+	s.postVotes[postID][userID] = value
+	score := sumVotes(s.postVotes[postID])
+	return score, value, nil
+}
+
+// ClearPostVote removes a user's vote and returns the new score and my_vote.
+func (s *Store) ClearPostVote(postID, userID string) (int, int, error) {
+	if strings.TrimSpace(userID) == "" {
+		return 0, 0, ErrInvalidInput
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.postExists(postID) {
+		return 0, 0, ErrNotFound
+	}
+
+	if votes := s.postVotes[postID]; votes != nil {
+		delete(votes, userID)
+	}
+	score := sumVotes(s.postVotes[postID])
+	return score, 0, nil
+}
+
 // SaveFile stores file metadata and returns it.
 func (s *Store) SaveFile(uploaderID, filename, storageKey, storagePath string) FileMeta {
 	s.mu.Lock()
@@ -491,3 +587,20 @@ func now() string {
 }
 
 var _ API = (*Store)(nil)
+
+func (s *Store) postExists(postID string) bool {
+	for _, post := range s.posts {
+		if post.ID == postID && post.DeletedAt == "" {
+			return true
+		}
+	}
+	return false
+}
+
+func sumVotes(votes map[string]int) int {
+	score := 0
+	for _, value := range votes {
+		score += value
+	}
+	return score
+}

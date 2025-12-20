@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -109,6 +110,14 @@ func (s *SQLiteStore) migrate() error {
 			created_at TEXT NOT NULL,
 			deleted_at TEXT
 		);`,
+		`CREATE TABLE IF NOT EXISTS post_votes (
+			post_id TEXT NOT NULL,
+			user_id TEXT NOT NULL,
+			value INTEGER NOT NULL,
+			created_at TEXT NOT NULL,
+			PRIMARY KEY (post_id, user_id)
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_post_votes_post ON post_votes(post_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_comments_post_seq ON comments(post_id, seq);`,
 
 		`CREATE TABLE IF NOT EXISTS files (
@@ -223,11 +232,7 @@ func (s *SQLiteStore) seedBoards() error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	boards := []Board{
-		{ID: "b_1", Name: "General", Description: "General discussion"},
-		{ID: "b_2", Name: "Marketplace", Description: "Buy and sell"},
-		{ID: "b_3", Name: "Resources", Description: "Study resources"},
-	}
+	boards := defaultBoards()
 	for i, board := range boards {
 		if _, err := tx.Exec(
 			`INSERT INTO boards(seq, id, name, description) VALUES(?, ?, ?, ?);`,
@@ -239,7 +244,11 @@ func (s *SQLiteStore) seedBoards() error {
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	log.Printf("seed boards inserted")
+	return nil
 }
 
 func (s *SQLiteStore) nextCounter(tx *sql.Tx, name string) (int, error) {
@@ -614,6 +623,21 @@ func (s *SQLiteStore) Comments(postID string) []Comment {
 	return out
 }
 
+func (s *SQLiteStore) CommentCount(postID string) int {
+	var count int
+	err := s.db.QueryRow(
+		`SELECT COUNT(1)
+		 FROM comments
+		 WHERE post_id = ?
+		   AND (deleted_at IS NULL OR TRIM(deleted_at) = '');`,
+		postID,
+	).Scan(&count)
+	if err != nil {
+		return 0
+	}
+	return count
+}
+
 func (s *SQLiteStore) GetComment(postID, commentID string) (Comment, bool) {
 	var comment Comment
 	var deletedAt sql.NullString
@@ -710,6 +734,89 @@ func (s *SQLiteStore) SoftDeleteComment(postID, commentID, actorUserID string) e
 		return err
 	}
 	return tx.Commit()
+}
+
+func (s *SQLiteStore) PostScore(postID string) int {
+	var score int
+	err := s.db.QueryRow(
+		`SELECT COALESCE(SUM(value), 0)
+		 FROM post_votes
+		 WHERE post_id = ?;`,
+		postID,
+	).Scan(&score)
+	if err != nil {
+		return 0
+	}
+	return score
+}
+
+func (s *SQLiteStore) PostVote(postID, userID string) int {
+	if strings.TrimSpace(userID) == "" {
+		return 0
+	}
+	var value int
+	err := s.db.QueryRow(
+		`SELECT value
+		 FROM post_votes
+		 WHERE post_id = ? AND user_id = ?;`,
+		postID,
+		userID,
+	).Scan(&value)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0
+	}
+	if err != nil {
+		return 0
+	}
+	return value
+}
+
+func (s *SQLiteStore) VotePost(postID, userID string, value int) (int, int, error) {
+	if value != 1 && value != -1 {
+		return 0, 0, ErrInvalidInput
+	}
+	if strings.TrimSpace(userID) == "" {
+		return 0, 0, ErrInvalidInput
+	}
+	if _, ok := s.GetPost(postID); !ok {
+		return 0, 0, ErrNotFound
+	}
+
+	if _, err := s.db.Exec(
+		`INSERT INTO post_votes (post_id, user_id, value, created_at)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(post_id, user_id)
+		 DO UPDATE SET value = excluded.value, created_at = excluded.created_at;`,
+		postID,
+		userID,
+		value,
+		nowRFC3339(),
+	); err != nil {
+		return 0, 0, err
+	}
+
+	score := s.PostScore(postID)
+	return score, value, nil
+}
+
+func (s *SQLiteStore) ClearPostVote(postID, userID string) (int, int, error) {
+	if strings.TrimSpace(userID) == "" {
+		return 0, 0, ErrInvalidInput
+	}
+	if _, ok := s.GetPost(postID); !ok {
+		return 0, 0, ErrNotFound
+	}
+
+	if _, err := s.db.Exec(
+		`DELETE FROM post_votes WHERE post_id = ? AND user_id = ?;`,
+		postID,
+		userID,
+	); err != nil {
+		return 0, 0, err
+	}
+
+	score := s.PostScore(postID)
+	return score, 0, nil
 }
 
 func (s *SQLiteStore) SaveFile(uploaderID, filename, storageKey, storagePath string) FileMeta {

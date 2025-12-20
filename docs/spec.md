@@ -60,7 +60,10 @@
 * 版块（Boards）
 * 帖子（Posts）
 * 评论（Comments）
-* 点赞 / 基础互动（Reactions）
+* 点赞 / 点踩 / 分值（Reactions，需持久化）
+* 评论按钮 + 评论数展示
+* Award（消耗用户资源，规则待后端设计）
+* 分享（复制链接为主，后续可扩展）
 
 ### 3.3 实时聊天
 
@@ -97,6 +100,18 @@
 * author_id
 * title
 * content
+* created_at
+* score（分值，默认 0，后端持久化）
+* comment_count（评论数）
+* award_count（奖励数）
+* my_vote（当前用户对该帖的投票：-1 / 0 / 1，可选字段）
+
+### 4.8 PostVote
+
+* id
+* post_id
+* user_id
+* value（-1 / 1）
 * created_at
 
 ### 4.4 Comment

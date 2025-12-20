@@ -44,4 +44,3 @@ func (l *FixedWindow) Allow(key string) bool {
 	l.items[key] = item
 	return true
 }
-

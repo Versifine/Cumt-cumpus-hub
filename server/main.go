@@ -112,6 +112,10 @@ func main() {
 			communityHandler.Post(parts[0])(w, r)
 			return
 		}
+		if len(parts) == 2 && parts[1] == "votes" {
+			communityHandler.Votes(parts[0])(w, r)
+			return
+		}
 		if len(parts) == 2 && parts[1] == "comments" {
 			communityHandler.Comments(parts[0])(w, r)
 			return
@@ -196,24 +200,21 @@ func main() {
 }
 
 func mustCreateStore(uploadDir string) store.API {
-	driver := strings.ToLower(strings.TrimSpace(os.Getenv("STORE_DRIVER")))
-	switch driver {
-	case "", "memory":
-		return store.NewStore()
-	case "sqlite":
-		path := strings.TrimSpace(os.Getenv("SQLITE_PATH"))
-		if path == "" {
-			path = filepath.Join(uploadDir, "campus-hub.db")
-		}
-		dbStore, err := store.OpenSQLite(path)
-		if err != nil {
-			log.Fatalf("failed to open sqlite store: %v", err)
-		}
-		return dbStore
-	default:
-		log.Fatalf("unknown STORE_DRIVER=%q (supported: memory, sqlite)", driver)
-		return store.NewStore()
+	path := strings.TrimSpace(os.Getenv("SQLITE_PATH"))
+	if path == "" {
+		path = filepath.Join("server", "storage", "dev.db")
 	}
+	path = filepath.Clean(path)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		log.Fatalf("failed to create sqlite directory: %v", err)
+	}
+
+	log.Printf("storage: using sqlite database at %s", path)
+	dbStore, err := store.OpenSQLite(path)
+	if err != nil {
+		log.Fatalf("failed to open sqlite store: %v", err)
+	}
+	return dbStore
 }
 
 // logging 是一个非常简单的中间件：

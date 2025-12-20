@@ -474,4 +474,63 @@
 
 ---
 
+## 12. 互动与投票（已实现）
+
+### 12.1 对帖子投票（点赞/点踩）
+
+`POST /api/v1/posts/{post_id}/votes`
+
+鉴权：登录用户
+
+请求体：
+
+```json
+{ "value": 1 }
+```
+
+说明：
+
+* `value` 仅允许 `1`（赞）或 `-1`（踩）
+* 重复投同一方向应返回当前结果或做幂等处理
+
+响应（建议）：
+
+```json
+{ "post_id": "p_1", "score": 12, "my_vote": 1 }
+```
+
+### 12.2 取消投票
+
+`DELETE /api/v1/posts/{post_id}/votes`
+
+鉴权：登录用户
+
+响应（建议）：
+
+```json
+{ "post_id": "p_1", "score": 11, "my_vote": 0 }
+```
+
+### 12.3 Award
+
+`POST /api/v1/posts/{post_id}/awards`
+
+鉴权：登录用户
+
+说明：
+
+* Award 消耗用户账户资源
+* 资源余额与消耗规则另行定义
+
+### 12.4 分享统计（可选）
+
+`POST /api/v1/posts/{post_id}/shares`
+
+- 点赞 / 点踩：`POST /api/v1/posts/{post_id}/votes`
+- 取消投票：`DELETE /api/v1/posts/{post_id}/votes`
+- Award：`POST /api/v1/posts/{post_id}/awards`
+- 分享统计（可选）：`POST /api/v1/posts/{post_id}/shares`
+
+---
+
 > 本 API 文档为 **Demo 阶段 v0.2**，后续修改需同步更新并记录于 `decision-log.md`。

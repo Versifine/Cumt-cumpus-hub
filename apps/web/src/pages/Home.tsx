@@ -29,6 +29,7 @@ const Home = () => {
     loading: true,
     error: null,
   })
+  const [activeBoardId, setActiveBoardId] = useState<string | null>(null)
 
   const loadBoards = useCallback(async () => {
     setBoardsState((prev) => ({ ...prev, loading: true, error: null }))
@@ -49,7 +50,7 @@ const Home = () => {
     setPostsState((prev) => ({ ...prev, loading: true, error: null }))
 
     try {
-      const data = await fetchPosts(1, 20)
+      const data = await fetchPosts(1, 20, activeBoardId ?? undefined)
       setPostsState({ data: data.items, loading: false, error: null })
     } catch (error) {
       setPostsState({
@@ -58,12 +59,16 @@ const Home = () => {
         error: getErrorMessage(error),
       })
     }
-  }, [])
+  }, [activeBoardId])
 
   useEffect(() => {
     void loadBoards()
     void loadPosts()
   }, [loadBoards, loadPosts])
+
+  const activeBoard = boardsState.data.find(
+    (board) => board.id === activeBoardId,
+  )
 
   return (
     <div className="app-shell">
@@ -81,13 +86,33 @@ const Home = () => {
                 description="Once boards are created, they will show up here."
               />
             ) : (
-              <BoardList boards={boardsState.data} />
+              <BoardList
+                boards={boardsState.data}
+                activeBoardId={activeBoardId}
+                onSelect={setActiveBoardId}
+              />
             )}
           </SectionCard>
         </aside>
 
         <main className="feed" aria-live="polite">
-          <SectionCard title="Latest Posts">
+          <SectionCard
+            title={activeBoard ? 'Board Posts' : 'Latest Posts'}
+            actions={
+              <div className="filter-pill">
+                <span>{activeBoard ? activeBoard.name : 'All Boards'}</span>
+                {activeBoard ? (
+                  <button
+                    type="button"
+                    className="filter-clear"
+                    onClick={() => setActiveBoardId(null)}
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            }
+          >
             {postsState.loading ? (
               <PostSkeletonList count={4} />
             ) : postsState.error ? (
@@ -95,7 +120,11 @@ const Home = () => {
             ) : postsState.data.length === 0 ? (
               <EmptyState
                 title="No posts yet"
-                description="Be the first to start a discussion."
+                description={
+                  activeBoard
+                    ? 'This board has no posts yet.'
+                    : 'Be the first to start a discussion.'
+                }
                 action={
                   <Link className="retry-button" to="/post/demo">
                     查看示例帖子
