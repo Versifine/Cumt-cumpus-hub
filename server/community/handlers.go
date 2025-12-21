@@ -114,11 +114,21 @@ func (h *Handler) CommentVotes(postID, commentID string) http.HandlerFunc {
 
 func (h *Handler) listPosts(w http.ResponseWriter, r *http.Request) {
 	boardID := r.URL.Query().Get("board_id")
+	authorID := r.URL.Query().Get("author_id")
 	page := parsePositiveInt(r.URL.Query().Get("page"), 1)
 	pageSize := parsePositiveInt(r.URL.Query().Get("page_size"), 20)
 
 	viewerID := h.viewerID(r)
 	posts := h.Store.Posts(boardID)
+	if authorID != "" {
+		filtered := make([]store.Post, 0, len(posts))
+		for _, post := range posts {
+			if post.AuthorID == authorID {
+				filtered = append(filtered, post)
+			}
+		}
+		posts = filtered
+	}
 	total := len(posts)
 
 	start := (page - 1) * pageSize

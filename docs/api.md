@@ -146,6 +146,32 @@
 
 ---
 
+### 4.2 获取公开资料（已实现）
+
+`GET /api/v1/users/{id}`
+
+响应：
+
+```json
+{
+  "id": "u_123",
+  "nickname": "alice",
+  "avatar": "",
+  "cover": "",
+  "bio": "",
+  "created_at": "2025-01-01T00:00:00Z",
+  "posts_count": 3,
+  "comments_count": 8
+}
+```
+
+说明：
+
+- `avatar/cover/bio` 当前为空字符串，后续可能演进为真实字段
+- `posts_count/comments_count` 统计非删除数据
+
+---
+
 ## 5. 版块 Board
 
 ### 5.1 获取版块列表（已实现）
@@ -175,6 +201,7 @@
 查询参数：
 
 * `board_id`（可选）
+* `author_id`（可选）
 * `page`
 * `page_size`
 
@@ -358,40 +385,46 @@
 - `404`：帖子/评论不存在或已删除（`code=2001`）
 
 ---
-
-
-### 7.4 ???????/???????
+### 7.4 对评论投票 / 取消投票（已实现）
 
 `POST /api/v1/posts/{post_id}/comments/{comment_id}/votes`
 
-??????Bearer Token?
+鉴权：需要（Bearer Token）
 
-???
+请求体：
+
 ```json
 { "value": 1 }
 ```
 
-???????
+说明：
+
+* `value` 仅允许 `1`（赞）或 `-1`（踩）
+* 重复投同一方向应返回当前结果或做幂等处理
+
+响应（示例）：
+
 ```json
 { "comment_id": "c_1", "score": 12, "my_vote": 1 }
 ```
 
 `DELETE /api/v1/posts/{post_id}/comments/{comment_id}/votes`
 
-??????Bearer Token?
+鉴权：需要（Bearer Token）
 
-???????
+响应（示例）：
+
 ```json
 { "comment_id": "c_1", "score": 11, "my_vote": 0 }
 ```
 
-?????
-- `400`?value ???`code=2001`?
-- `401`????/Token ???`code=1001`?
-- `404`???/??????????`code=2001`?
+常见错误：
+
+- `400`：value 不合法（`code=2001`）
+- `401`：未登录/Token 无效（`code=1001`）
+- `404`：帖子/评论不存在或已删除（`code=2001`）
 
 ---
-
 ## 8. 文件 File
 
 ### 8.1 上传附件（已实现）

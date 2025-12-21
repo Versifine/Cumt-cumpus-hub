@@ -377,6 +377,39 @@ func (s *Store) CommentCount(postID string) int {
 	return count
 }
 
+func (s *Store) UserStats(userID string) (int, int, error) {
+	trimmed := strings.TrimSpace(userID)
+	if trimmed == "" {
+		return 0, 0, ErrInvalidInput
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	activePosts := make(map[string]struct{}, len(s.posts))
+	postsCount := 0
+	for _, post := range s.posts {
+		if post.DeletedAt != "" {
+			continue
+		}
+		activePosts[post.ID] = struct{}{}
+		if post.AuthorID == trimmed {
+			postsCount++
+		}
+	}
+
+	commentsCount := 0
+	for _, comment := range s.comments {
+		if comment.DeletedAt != "" || comment.AuthorID != trimmed {
+			continue
+		}
+		if _, ok := activePosts[comment.PostID]; ok {
+			commentsCount++
+		}
+	}
+	return postsCount, commentsCount, nil
+}
+
 // PostScore returns the aggregated vote score for a post.
 func (s *Store) PostScore(postID string) int {
 	s.mu.Lock()

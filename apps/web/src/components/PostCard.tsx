@@ -5,6 +5,7 @@ import { clearVote, votePost } from '../api/posts'
 import { getErrorMessage } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { formatRelativeTimeUTC8 } from '../utils/time'
+import InlineAvatar from './InlineAvatar'
 
 type PostCardProps = {
   post: PostItem
@@ -50,6 +51,7 @@ const PostCard = ({ post }: PostCardProps) => {
   const { user } = useAuth()
   const timeLabel = formatRelativeTimeUTC8(post.created_at)
   const boardName = getBoardName(post)
+  const authorAvatar = (post.author as { avatar_url?: string | null }).avatar_url ?? null
   const commentCount = getCommentCount(post)
   const baseScore = typeof post.score === 'number' ? post.score : 0
   const baseVote = normalizeVote(post.my_vote)
@@ -66,7 +68,7 @@ const PostCard = ({ post }: PostCardProps) => {
     setScore(baseScore)
   }, [baseVote, baseScore, post.id])
 
-  const metaItems = [post.author.nickname, timeLabel].filter(
+  const metaItems = [timeLabel].filter(
     (item): item is string => Boolean(item),
   )
 
@@ -129,6 +131,11 @@ const PostCard = ({ post }: PostCardProps) => {
     navigateToPost()
   }
 
+  const handleAuthorClick = (event: MouseEvent<HTMLButtonElement>) => {
+    stopCardNavigation(event)
+    navigate(`/u/${post.author.id}`)
+  }
+
   const handleShare = async (event: MouseEvent<HTMLButtonElement>) => {
     stopCardNavigation(event)
 
@@ -171,6 +178,16 @@ const PostCard = ({ post }: PostCardProps) => {
           </details>
         </div>
         <div className="post-card__meta">
+          <span className="post-card__meta-item">
+            <button
+              type="button"
+              className="post-card__meta-button"
+              onClick={handleAuthorClick}
+            >
+              <InlineAvatar name={post.author.nickname} src={authorAvatar} size={28} />
+              <span>{post.author.nickname}</span>
+            </button>
+          </span>
           {metaItems.map((item, index) => (
             <span key={`${item}-${index}`} className="post-card__meta-item">
               {item}

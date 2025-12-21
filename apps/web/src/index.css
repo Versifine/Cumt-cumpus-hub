@@ -381,6 +381,22 @@ textarea:focus-visible {
   align-items: center;
 }
 
+.post-card__meta-button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.post-card__meta-button:hover {
+  text-decoration: underline;
+}
+
 .post-card__meta-item::after {
   content: '·';
   margin: 0 8px;
@@ -828,6 +844,43 @@ textarea:focus-visible {
   margin-bottom: 16px;
   color: var(--muted);
   font-size: 0.95rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.post-meta__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-weight: 600;
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.post-meta__author {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-weight: 600;
+  color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.post-meta__link:hover,
+.post-meta__author:hover {
+  text-decoration: underline;
+}
+
+.post-meta__dot {
+  color: rgba(40, 33, 24, 0.45);
 }
 
 .post-detail__content {
@@ -893,23 +946,30 @@ textarea:focus-visible {
 .comment-meta {
   font-size: 0.85rem;
   color: var(--muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.comment-delete {
+.comment-author {
   border: none;
   background: transparent;
-  color: var(--accent-strong);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
+  color: var(--accent-strong);
   cursor: pointer;
 }
 
-.comment-delete:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
+.comment-author:hover {
+  text-decoration: underline;
 }
 
-.comment-delete:hover {
-  text-decoration: underline;
+.comment-meta__dot {
+  color: rgba(40, 33, 24, 0.45);
 }
 
 .comment-content {
@@ -1009,6 +1069,32 @@ textarea:focus-visible {
 
 .back-link:hover {
   text-decoration: underline;
+}
+
+.inline-avatar {
+  width: var(--avatar-size, 24px);
+  height: var(--avatar-size, 24px);
+  border-radius: 999px;
+  border: 1px solid rgba(120, 96, 68, 0.2);
+  background: rgba(255, 255, 255, 0.85);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-strong);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.inline-avatar__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.inline-avatar__initial {
+  line-height: 1;
 }
 
 @keyframes rise {
@@ -1192,6 +1278,200 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+.profile-page {
+  max-width: 1100px;
+  margin: 32px auto 64px;
+  padding: 0 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.profile-header {
+  display: grid;
+  gap: 12px;
+}
+
+.profile-cover {
+  position: relative;
+  z-index: 0;
+  height: 220px;
+  border-radius: 20px;
+  border: 1px solid rgba(110, 88, 60, 0.2);
+  background: linear-gradient(135deg, #f2e7d9, #f6f0e6);
+  overflow: hidden;
+}
+
+.profile-cover--image {
+  background-size: cover;
+  background-position: center;
+}
+
+.profile-cover__pattern {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.6), transparent 45%),
+    radial-gradient(circle at 80% 30%, rgba(255, 255, 255, 0.35), transparent 50%);
+}
+
+.profile-header__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  margin-top: -48px;
+  padding: 0 24px;
+}
+
+.profile-avatar {
+  width: var(--avatar-size, 96px);
+  height: var(--avatar-size, 96px);
+  border-radius: 999px;
+  border: 4px solid rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 24px rgba(60, 45, 30, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.profile-avatar__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar__initial {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--accent-strong);
+}
+
+.profile-header__info {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+.profile-name {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.profile-bio {
+  margin: 0;
+  color: var(--muted);
+}
+
+.profile-bio--empty {
+  color: rgba(60, 49, 35, 0.5);
+}
+
+.profile-card {
+  background: var(--card);
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  padding: 18px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+}
+
+.profile-card__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.profile-card__label {
+  font-weight: 600;
+  color: rgba(40, 33, 24, 0.7);
+}
+
+.profile-card__value {
+  color: var(--ink);
+}
+
+.profile-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+
+.profile-stat {
+  display: grid;
+  gap: 4px;
+}
+
+.profile-stat__value {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.profile-stat__label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profile-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid rgba(120, 96, 68, 0.2);
+}
+
+.profile-tab {
+  border: none;
+  background: transparent;
+  padding: 10px 14px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.profile-tab--active {
+  color: var(--accent-strong);
+  border-color: rgba(197, 95, 36, 0.6);
+}
+
+.profile-content {
+  display: grid;
+  gap: 14px;
+}
+
+.profile-skeleton {
+  display: grid;
+  gap: 14px;
+}
+
+.profile-skeleton__cover {
+  height: 220px;
+  border-radius: 20px;
+  border: 1px solid rgba(110, 88, 60, 0.16);
+  background: linear-gradient(90deg, #efe2d1 0%, #f8f1e6 50%, #efe2d1 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
+}
+
+.profile-skeleton__body {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-skeleton__stats {
+  display: flex;
+  gap: 12px;
+}
+
 @media (max-width: 1100px) {
   .layout {
     grid-template-columns: 220px minmax(0, 1fr);
@@ -1233,5 +1513,24 @@ textarea:focus-visible {
 
   .layout {
     padding: 0 16px;
+  }
+
+  .profile-page {
+    padding: 0 16px;
+  }
+
+  .profile-cover {
+    height: 170px;
+  }
+
+  .profile-header__content {
+    margin-top: -36px;
+    padding: 0 16px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .profile-avatar {
+    --avatar-size: 80px;
   }
 }

@@ -87,6 +87,14 @@ func main() {
 
 	// 获取当前登录用户信息（通常依赖鉴权 token/cookie 等）。
 	mux.HandleFunc("/api/v1/users/me", authService.MeHandler)
+	mux.HandleFunc("/api/v1/users/", func(w http.ResponseWriter, r *http.Request) {
+		userID := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v1/users/"), "/")
+		if userID == "" || userID == "me" {
+			transport.WriteError(w, http.StatusNotFound, 2001, "not found")
+			return
+		}
+		authService.PublicUserHandler(userID)(w, r)
+	})
 
 	// -----------------------------
 	// 6) REST API：社区相关

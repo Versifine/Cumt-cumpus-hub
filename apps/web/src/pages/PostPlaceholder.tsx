@@ -24,6 +24,7 @@ import {
 } from '../api/posts'
 import SiteHeader from '../components/SiteHeader'
 import { ErrorState } from '../components/StateBlocks'
+import InlineAvatar from '../components/InlineAvatar'
 import { useAuth } from '../context/AuthContext'
 import { formatRelativeTimeUTC8 } from '../utils/time'
 
@@ -82,6 +83,11 @@ const buildCommentTree = (comments: CommentItem[]) => {
   })
 
   return roots
+}
+
+const getAuthorAvatar = (author: CommentItem['author']) => {
+  const record = author as { avatar_url?: string | null }
+  return record.avatar_url ?? null
 }
 
 const PostPlaceholder = () => {
@@ -182,6 +188,19 @@ const PostPlaceholder = () => {
       navigate(-1)
     } else {
       navigate('/')
+    }
+  }
+
+  const handleAuthorProfile = () => {
+    const authorId = state.data?.author.id
+    if (authorId) {
+      navigate(`/u/${authorId}`)
+    }
+  }
+
+  const handleCommentAuthorProfile = (authorId: string) => {
+    if (authorId) {
+      navigate(`/u/${authorId}`)
     }
   }
 
@@ -387,6 +406,7 @@ const PostPlaceholder = () => {
     const shareLabel = commentShareLabels[comment.id] ?? '分享'
     const canDelete = Boolean(user && comment.author.id === user.id)
     const indentLevel = Math.min(depth, 4)
+    const authorAvatar = getAuthorAvatar(comment.author)
     const threadStyle = {
       '--comment-indent': `${indentLevel * 16}px`,
     } as CSSProperties
@@ -400,7 +420,16 @@ const PostPlaceholder = () => {
         <div id={`comment-${comment.id}`} className="comment-item">
           <div className="comment-header">
             <div className="comment-meta">
-              {comment.author.nickname} · {formatRelativeTimeUTC8(comment.created_at)}
+              <button
+                type="button"
+                className="comment-author"
+                onClick={() => handleCommentAuthorProfile(comment.author.id)}
+              >
+                <InlineAvatar name={comment.author.nickname} src={authorAvatar} size={26} />
+                <span>{comment.author.nickname}</span>
+              </button>
+              <span className="comment-meta__dot">·</span>
+              <span>{formatRelativeTimeUTC8(comment.created_at)}</span>
             </div>
             <details className="action-menu">
               <summary className="action-menu__trigger" aria-label="更多操作">
@@ -517,13 +546,26 @@ const PostPlaceholder = () => {
                 </details>
               </div>
               <div className="post-detail__meta">
-                {[
-                  state.data.author.nickname,
-                  formatRelativeTimeUTC8(state.data.created_at),
-                  state.data.board?.name,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
+                <button
+                  type="button"
+                  className="post-meta__author"
+                  onClick={handleAuthorProfile}
+                >
+                  <InlineAvatar
+                    name={state.data.author.nickname}
+                    src={getAuthorAvatar(state.data.author)}
+                    size={28}
+                  />
+                  <span>{state.data.author.nickname}</span>
+                </button>
+                <span className="post-meta__dot">·</span>
+                <span>{formatRelativeTimeUTC8(state.data.created_at)}</span>
+                {state.data.board?.name ? (
+                  <>
+                    <span className="post-meta__dot">·</span>
+                    <span>{state.data.board.name}</span>
+                  </>
+                ) : null}
               </div>
               <div className="post-detail__content">{state.data.content}</div>
               <div className="post-card__actions">

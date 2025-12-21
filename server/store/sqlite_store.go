@@ -662,6 +662,39 @@ func (s *SQLiteStore) CommentCount(postID string) int {
 	return count
 }
 
+func (s *SQLiteStore) UserStats(userID string) (int, int, error) {
+	trimmed := strings.TrimSpace(userID)
+	if trimmed == "" {
+		return 0, 0, ErrInvalidInput
+	}
+
+	var postsCount int
+	if err := s.db.QueryRow(
+		`SELECT COUNT(1)
+		 FROM posts
+		 WHERE author_id = ?
+		   AND (deleted_at IS NULL OR TRIM(deleted_at) = '');`,
+		trimmed,
+	).Scan(&postsCount); err != nil {
+		return 0, 0, err
+	}
+
+	var commentsCount int
+	if err := s.db.QueryRow(
+		`SELECT COUNT(1)
+		 FROM comments c
+		 JOIN posts p ON p.id = c.post_id
+		 WHERE c.author_id = ?
+		   AND (c.deleted_at IS NULL OR TRIM(c.deleted_at) = '')
+		   AND (p.deleted_at IS NULL OR TRIM(p.deleted_at) = '');`,
+		trimmed,
+	).Scan(&commentsCount); err != nil {
+		return 0, 0, err
+	}
+
+	return postsCount, commentsCount, nil
+}
+
 func (s *SQLiteStore) GetComment(postID, commentID string) (Comment, bool) {
 	var comment Comment
 	var deletedAt sql.NullString

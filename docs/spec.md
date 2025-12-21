@@ -53,6 +53,8 @@
 
 * 注册/登录（账号 + 密码 + token）
 * 用户昵称 / 基础资料
+* 用户主页（Profile v1）：`/u/:id`，展示封面/头像/昵称/签名与发帖列表（评论 Tab 先占位）
+* 关注/粉丝（关注列表、粉丝列表与数量统计）
 * 前端匿名展示（非强匿名）
 
 ### 3.2 社区与帖子
@@ -86,6 +88,11 @@
 
 * id
 * nickname
+* avatar_url（可选）
+* cover_url（可选）
+* bio（可选）
+* following_count（可选）
+* followers_count（可选）
 * created_at
 
 ### 4.2 Board

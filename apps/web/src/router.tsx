@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import PostPlaceholder from './pages/PostPlaceholder'
 import Resources from './pages/Resources'
 import Submit from './pages/Submit'
+import UserProfile from './pages/UserProfile'
 
 const router = createBrowserRouter([
   {
@@ -43,6 +44,10 @@ const router = createBrowserRouter([
   {
     path: '/post/:id',
     element: <PostPlaceholder />,
+  },
+  {
+    path: '/u/:id',
+    element: <UserProfile />,
   },
 ])
 

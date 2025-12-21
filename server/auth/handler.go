@@ -27,6 +27,10 @@ type userResponse struct {
 	Nickname string `json:"nickname"`
 }
 
+type userStatsStore interface {
+	UserStats(userID string) (int, int, error)
+}
+
 // RegisterHandler handles POST /api/v1/auth/register.
 func (s *Service) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -125,6 +129,56 @@ func (s *Service) MeHandler(w http.ResponseWriter, r *http.Request) {
 	transport.WriteJSON(w, http.StatusOK, resp)
 }
 
+// PublicUserHandler handles GET /api/v1/users/{id}.
+func (s *Service) PublicUserHandler(userID string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			transport.WriteError(w, http.StatusMethodNotAllowed, 2001, "method not allowed")
+			return
+		}
+
+		trimmedID := strings.TrimSpace(userID)
+		if trimmedID == "" {
+			transport.WriteError(w, http.StatusNotFound, 2001, "not found")
+			return
+		}
+
+		user, ok := s.Store.GetUser(trimmedID)
+		if !ok {
+			transport.WriteError(w, http.StatusNotFound, 2001, "not found")
+			return
+		}
+
+		postsCount, commentsCount, err := s.userStats(trimmedID)
+		if err != nil {
+			transport.WriteError(w, http.StatusInternalServerError, 5000, "server error")
+			return
+		}
+
+		resp := struct {
+			ID            string `json:"id"`
+			Nickname      string `json:"nickname"`
+			Avatar        string `json:"avatar"`
+			Cover         string `json:"cover"`
+			Bio           string `json:"bio"`
+			CreatedAt     string `json:"created_at"`
+			PostsCount    int    `json:"posts_count"`
+			CommentsCount int    `json:"comments_count"`
+		}{
+			ID:            user.ID,
+			Nickname:      user.Nickname,
+			Avatar:        "",
+			Cover:         "",
+			Bio:           "",
+			CreatedAt:     user.CreatedAt,
+			PostsCount:    postsCount,
+			CommentsCount: commentsCount,
+		}
+
+		transport.WriteJSON(w, http.StatusOK, resp)
+	}
+}
+
 // RequireUser extracts the Bearer token, loads the user, and writes a 401 error on failure.
 func (s *Service) RequireUser(w http.ResponseWriter, r *http.Request) (store.User, bool) {
 	token := bearerToken(r)
@@ -151,4 +205,26 @@ func bearerToken(r *http.Request) string {
 		return strings.TrimSpace(authHeader[7:])
 	}
 	return ""
+}
+
+func (s *Service) userStats(userID string) (int, int, error) {
+	if statsStore, ok := s.Store.(userStatsStore); ok {
+		return statsStore.UserStats(userID)
+	}
+
+	posts := s.Store.Posts("")
+	postsCount := 0
+	commentsCount := 0
+	for _, post := range posts {
+		if post.AuthorID == userID {
+			postsCount++
+		}
+		comments := s.Store.Comments(post.ID)
+		for _, comment := range comments {
+			if comment.AuthorID == userID {
+				commentsCount++
+			}
+		}
+	}
+	return postsCount, commentsCount, nil
 }
