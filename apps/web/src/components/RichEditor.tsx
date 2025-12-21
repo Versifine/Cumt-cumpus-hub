@@ -16,6 +16,7 @@ import {
   type JSONContent,
   type NodeViewProps,
 } from '@tiptap/react'
+import type { EditorView } from '@tiptap/pm/view'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
@@ -315,7 +316,7 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
     )
 
     const editor = useEditor(
-      () => ({
+      {
         extensions: [
           Document,
           Paragraph,
@@ -347,7 +348,7 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
           attributes: {
             class: 'rich-editor__content',
           },
-          handlePaste: (_view, event) => {
+          handlePaste: (_view: EditorView, event: ClipboardEvent) => {
             const items = Array.from(event.clipboardData?.items ?? [])
             const files = items
               .filter((item) => item.kind === 'file')
@@ -361,7 +362,7 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             files.forEach(insertImageFile)
             return true
           },
-          handleDrop: (_view, event) => {
+          handleDrop: (_view: EditorView, event: DragEvent) => {
             const files = Array.from(event.dataTransfer?.files ?? []).filter((file) =>
               file.type.startsWith('image/'),
             )
@@ -373,12 +374,12 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
           },
         },
         editable: !disabled,
-        onUpdate: ({ editor }) => {
+        onUpdate: ({ editor }: { editor: Editor }) => {
           const json = editor.getJSON()
           const text = editor.getText()
           onChange({ json, text })
         },
-      }),
+      },
       [disabled, insertImageFile, onChange, placeholder, removeImageByUploadId, retryUpload],
     )
 
