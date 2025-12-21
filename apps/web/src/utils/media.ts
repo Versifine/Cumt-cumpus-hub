@@ -25,7 +25,7 @@ const getFileExtension = (value: string) => {
   return parts[parts.length - 1].toLowerCase()
 }
 
-const inferMediaKind = (value: AttachmentLike) => {
+const inferMediaKind = (value: AttachmentLike): MediaKind => {
   if (value.type) {
     if (value.type.startsWith('image/')) {
       return 'image'
@@ -65,10 +65,38 @@ const parseContentJSON = (value: unknown) => {
     try {
       return JSON.parse(value) as unknown
     } catch {
-      return null
+      return value
     }
   }
   return value
+}
+
+const extractMediaFromDelta = (doc: unknown): MediaItem[] => {
+  if (!doc || typeof doc !== 'object') {
+    return []
+  }
+  const record = doc as { ops?: unknown }
+  if (!Array.isArray(record.ops)) {
+    return []
+  }
+  const items: MediaItem[] = []
+  record.ops.forEach((op) => {
+    if (!op || typeof op !== 'object') {
+      return
+    }
+    const insert = (op as { insert?: unknown }).insert
+    if (!insert || typeof insert !== 'object') {
+      return
+    }
+    const insertRecord = insert as { image?: string; video?: string }
+    if (insertRecord.image) {
+      items.push({ url: insertRecord.image, type: 'image' })
+    }
+    if (insertRecord.video) {
+      items.push({ url: insertRecord.video, type: 'video' })
+    }
+  })
+  return items
 }
 
 const extractMediaFromJSON = (doc: unknown): MediaItem[] => {
@@ -97,6 +125,29 @@ const extractMediaFromJSON = (doc: unknown): MediaItem[] => {
   return items
 }
 
+const extractMediaFromHTML = (html: string) => {
+  const items: MediaItem[] = []
+  const imgPattern = /<img[^>]+src=["']([^"']+)["']/gi
+  let match = imgPattern.exec(html)
+  while (match) {
+    const url = match[1]
+    if (url) {
+      items.push({ url, type: 'image' })
+    }
+    match = imgPattern.exec(html)
+  }
+  const videoPattern = /<video[^>]+src=["']([^"']+)["']/gi
+  match = videoPattern.exec(html)
+  while (match) {
+    const url = match[1]
+    if (url) {
+      items.push({ url, type: 'video' })
+    }
+    match = videoPattern.exec(html)
+  }
+  return items
+}
+
 const extractMediaFromMarkdown = (markdown: string | null | undefined) => {
   if (!markdown) {
     return []
@@ -119,7 +170,18 @@ const extractInlineMedia = (comment: {
   content_json?: unknown
 }) => {
   const jsonDoc = parseContentJSON(comment.content_json)
+  if (typeof jsonDoc === 'string') {
+    const htmlItems = extractMediaFromHTML(jsonDoc)
+    if (htmlItems.length > 0) {
+      return htmlItems
+    }
+    return extractMediaFromMarkdown(jsonDoc)
+  }
   if (jsonDoc) {
+    const deltaItems = extractMediaFromDelta(jsonDoc)
+    if (deltaItems.length > 0) {
+      return deltaItems
+    }
     return extractMediaFromJSON(jsonDoc)
   }
   return extractMediaFromMarkdown(comment.content_md)
@@ -156,6 +218,17 @@ export const extractMediaFromContent = (contentJson: unknown) => {
   const jsonDoc = parseContentJSON(contentJson)
   if (!jsonDoc) {
     return [] as MediaItem[]
+  }
+  if (typeof jsonDoc === 'string') {
+    const htmlItems = extractMediaFromHTML(jsonDoc)
+    if (htmlItems.length > 0) {
+      return htmlItems
+    }
+    return extractMediaFromMarkdown(jsonDoc)
+  }
+  const deltaItems = extractMediaFromDelta(jsonDoc)
+  if (deltaItems.length > 0) {
+    return deltaItems
   }
   return extractMediaFromJSON(jsonDoc)
 }

@@ -31,7 +31,7 @@ import { ErrorState } from '../components/StateBlocks'
 import TagInput from '../components/TagInput'
 import InlineAvatar from '../components/InlineAvatar'
 import { useAuth } from '../context/AuthContext'
-import { normalizeCommentMedia, extractMediaFromContent } from '../utils/media'
+import { extractMediaFromContent, normalizeMediaFromAttachments } from '../utils/media'
 import { clearDraft, loadDraft, saveDraft } from '../utils/drafts'
 import { formatRelativeTimeUTC8 } from '../utils/time'
 
@@ -42,6 +42,7 @@ type LoadState<T> = {
 }
 
 type VoteState = -1 | 0 | 1
+type VoteAction = 1 | -1
 
 const normalizeVote = (value: number | undefined): VoteState => {
   if (value === 1) {
@@ -146,6 +147,25 @@ const PostPlaceholder = () => {
     () => buildCommentTree(commentsState.data),
     [commentsState.data],
   )
+  const postInlineMedia = useMemo(() => {
+    if (!state.data) {
+      return []
+    }
+    return extractMediaFromContent(state.data.content_json)
+  }, [state.data?.content_json])
+  const postAttachmentMedia = useMemo(() => {
+    if (!state.data) {
+      return []
+    }
+    return normalizeMediaFromAttachments(state.data.attachments)
+  }, [state.data?.attachments])
+  const postExtraMedia = useMemo(() => {
+    if (postInlineMedia.length === 0) {
+      return postAttachmentMedia
+    }
+    const inlineUrls = new Set(postInlineMedia.map((item) => item.url))
+    return postAttachmentMedia.filter((item) => !inlineUrls.has(item.url))
+  }, [postAttachmentMedia, postInlineMedia])
   const canSubmitComment = useMemo(() => {
     const mediaItems = extractMediaFromContent(commentDraft.json)
     return commentDraft.text.trim() !== '' || mediaItems.length > 0
@@ -287,9 +307,15 @@ const PostPlaceholder = () => {
     setCommentSubmitting(true)
 
     try {
+      const uploadResult = await commentEditorRef.current?.flushUploads()
+      if (uploadResult?.failed) {
+        setCommentError('图片上传失败，请重试')
+        return
+      }
+      const resolvedJson = uploadResult?.json ?? commentDraft.json
       await createComment(id, {
         content: commentDraft.text.trim(),
-        content_json: commentDraft.json ?? undefined,
+        content_json: resolvedJson ?? undefined,
         tags: commentTags,
         parent_id: replyTarget?.id ?? null,
       })
@@ -358,7 +384,7 @@ const PostPlaceholder = () => {
     }
   }
 
-  const handlePostVote = async (nextVote: VoteState) => {
+  const handlePostVote = async (nextVote: VoteAction) => {
     if (!id) {
       setCommentError('无效的帖子ID')
       return
@@ -412,7 +438,7 @@ const PostPlaceholder = () => {
     commentEditorRef.current?.focus()
   }
 
-  const handleCommentVote = async (commentId: string, nextVote: VoteState) => {
+  const handleCommentVote = async (commentId: string, nextVote: VoteAction) => {
     if (!id) {
       setCommentError('无效的帖子ID')
       return
@@ -497,7 +523,11 @@ const PostPlaceholder = () => {
   }
 
   const renderComment = (comment: ThreadedComment, depth: number) => {
-    const commentMedia = normalizeCommentMedia(comment)
+    const inlineMedia = extractMediaFromContent(comment.content_json)
+    const attachmentMedia = normalizeMediaFromAttachments(comment.attachments)
+    const inlineUrls = new Set(inlineMedia.map((item) => item.url))
+    const extraMedia = attachmentMedia.filter((item) => !inlineUrls.has(item.url))
+    const commentMedia = inlineMedia.length > 0 ? extraMedia : attachmentMedia
     const vote = commentVotes[comment.id] ?? 0
     const score = commentScores[comment.id] ?? 0
     const shareLabel = commentShareLabels[comment.id] ?? '分享'
@@ -672,13 +702,9 @@ const PostPlaceholder = () => {
                 contentJson={state.data.content_json}
                 contentText={state.data.content}
               />
-              <CommentMediaBlock
-                media={normalizeCommentMedia({
-                  attachments: state.data.attachments,
-                  content_json: state.data.content_json,
-                })}
-                variant="post"
-              />
+              {postExtraMedia.length > 0 ? (
+                <CommentMediaBlock media={postExtraMedia} variant="post" />
+              ) : null}
               <div className="post-card__actions">
                 <div className="post-card__vote-group" aria-label="点赞与点踩">
                   <button
@@ -761,6 +787,7 @@ const PostPlaceholder = () => {
                       value={commentDraft}
                       onChange={setCommentDraft}
                       onImageUpload={handleInlineImageUpload}
+                      deferredUpload
                       placeholder="Body text (optional)"
                       disabled={commentSubmitting}
                     />

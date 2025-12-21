@@ -5,6 +5,7 @@ import { clearVote, votePost } from '../api/posts'
 import { getErrorMessage } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { formatRelativeTimeUTC8 } from '../utils/time'
+import { extractMediaFromContent, type MediaItem } from '../utils/media'
 import InlineAvatar from './InlineAvatar'
 
 type PostCardProps = {
@@ -12,6 +13,7 @@ type PostCardProps = {
 }
 
 type VoteState = -1 | 0 | 1
+type VoteAction = 1 | -1
 
 const imageExtensions = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif'])
 const videoExtensions = new Set(['mp4', 'webm', 'ogg'])
@@ -58,6 +60,13 @@ const getCommentCount = (post: PostItem) => {
   return typeof count === 'number' ? count : 0
 }
 
+const renderInlinePreview = (item: MediaItem) => {
+  if (item.type === 'video') {
+    return <video src={item.url} controls preload="metadata" />
+  }
+  return <img src={item.url} alt={item.alt ?? 'media'} loading="lazy" />
+}
+
 const normalizeVote = (value: number | undefined): VoteState => {
   if (value === 1) {
     return 1
@@ -78,9 +87,13 @@ const PostCard = ({ post }: PostCardProps) => {
   const baseScore = typeof post.score === 'number' ? post.score : 0
   const baseVote = normalizeVote(post.my_vote)
   const content = post.content?.trim()
+  const inlineMedia = extractMediaFromContent(post.content_json)
+  const primaryInline = inlineMedia[0]
   const attachments = post.attachments ?? []
-  const primaryAttachment = attachments[0]
-  const extraAttachments = attachments.length > 1 ? attachments.length - 1 : 0
+  const primaryAttachment = primaryInline ? null : attachments[0]
+  const extraCount = primaryInline
+    ? Math.max(inlineMedia.length - 1, 0)
+    : Math.max(attachments.length - 1, 0)
 
   const [vote, setVote] = useState<VoteState>(baseVote)
   const [score, setScore] = useState(baseScore)
@@ -119,7 +132,7 @@ const PostCard = ({ post }: PostCardProps) => {
     event.stopPropagation()
   }
 
-  const handleVote = (nextVote: VoteState) => async (
+  const handleVote = (nextVote: VoteAction) => async (
     event: MouseEvent<HTMLButtonElement>,
   ) => {
     stopCardNavigation(event)
@@ -239,11 +252,18 @@ const PostCard = ({ post }: PostCardProps) => {
           {boardName ? <span className="post-card__badge">{boardName}</span> : null}
         </div>
         {content ? <p className="post-card__content">{content}</p> : null}
-        {primaryAttachment ? (
+        {primaryInline ? (
+          <div className="post-card__media" onClick={stopCardPropagation}>
+            {renderInlinePreview(primaryInline)}
+            {extraCount > 0 ? (
+              <span className="post-card__media-count">+{extraCount}</span>
+            ) : null}
+          </div>
+        ) : primaryAttachment ? (
           <div className="post-card__media" onClick={stopCardPropagation}>
             {renderAttachmentPreview(primaryAttachment)}
-            {extraAttachments > 0 ? (
-              <span className="post-card__media-count">+{extraAttachments}</span>
+            {extraCount > 0 ? (
+              <span className="post-card__media-count">+{extraCount}</span>
             ) : null}
           </div>
         ) : null}

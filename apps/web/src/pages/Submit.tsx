@@ -1,10 +1,10 @@
-﻿import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchBoards, type Board } from '../api/boards'
 import { getErrorMessage } from '../api/client'
 import { createPost } from '../api/posts'
 import { uploadInlineImage } from '../api/uploads'
-import RichEditor, { type RichEditorValue } from '../components/RichEditor'
+import RichEditor, { type RichEditorHandle, type RichEditorValue } from '../components/RichEditor'
 import SectionCard from '../components/SectionCard'
 import SiteHeader from '../components/SiteHeader'
 import { ErrorState } from '../components/StateBlocks'
@@ -35,6 +35,7 @@ const Submit = () => {
     json: null,
     text: '',
   })
+  const editorRef = useRef<RichEditorHandle | null>(null)
   const [tags, setTags] = useState<string[]>([])
   const [draftHint, setDraftHint] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -167,11 +168,17 @@ const Submit = () => {
     setSubmitting(true)
 
     try {
+      const uploadResult = await editorRef.current?.flushUploads()
+      if (uploadResult?.failed) {
+        setSubmitError('图片上传失败，请重试')
+        return
+      }
+      const resolvedJson = uploadResult?.json ?? content.json
       await createPost({
         board_id: boardId,
         title: title.trim(),
         content: content.text.trim(),
-        content_json: content.json ?? undefined,
+        content_json: resolvedJson ?? undefined,
         tags,
       })
       clearDraft(postDraftKey)
@@ -242,9 +249,11 @@ const Submit = () => {
               <div className="editor-shell">
                 <TagInput value={tags} onChange={setTags} maxTags={8} placeholder="Add tags" />
                 <RichEditor
+                  ref={editorRef}
                   value={content}
                   onChange={setContent}
                   onImageUpload={handleInlineImageUpload}
+                  deferredUpload
                   placeholder="Body text (optional)"
                   disabled={submitting}
                 />
@@ -288,3 +297,5 @@ const Submit = () => {
 }
 
 export default Submit
+
+

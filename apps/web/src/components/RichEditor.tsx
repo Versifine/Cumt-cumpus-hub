@@ -3,8 +3,8 @@
   useCallback,
   useEffect,
   useImperativeHandle,
-  useMemo,
   useRef,
+  type MouseEvent,
   type ChangeEvent,
 } from 'react'
 import {
@@ -40,6 +40,7 @@ export type RichEditorHandle = {
   focus: () => void
   insertText: (text: string) => void
   setContent: (json: JSONContent | null) => void
+  flushUploads: () => Promise<{ json: JSONContent | null; failed: boolean }>
 }
 
 type RichEditorProps = {
@@ -48,6 +49,7 @@ type RichEditorProps = {
   onImageUpload?: (file: File) => Promise<UploadResult>
   placeholder?: string
   disabled?: boolean
+  deferredUpload?: boolean
 }
 
 type InlineImageOptions = {
@@ -142,12 +144,27 @@ const createUploadId = () => {
 }
 
 const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
-  ({ value, onChange, onImageUpload, placeholder, disabled }, ref) => {
+  ({ value, onChange, onImageUpload, placeholder, disabled, deferredUpload }, ref) => {
     const lastContentRef = useRef<string>('')
     const pendingFiles = useRef(new Map<string, File>())
     const blobUrls = useRef(new Map<string, string>())
     const fileInputRef = useRef<HTMLInputElement | null>(null)
     const editorRef = useRef<Editor | null>(null)
+    const onImageUploadRef = useRef<typeof onImageUpload>(onImageUpload)
+    const onChangeRef = useRef(onChange)
+    const disabledRef = useRef(disabled)
+
+    useEffect(() => {
+      onImageUploadRef.current = onImageUpload
+    }, [onImageUpload])
+
+    useEffect(() => {
+      onChangeRef.current = onChange
+    }, [onChange])
+
+    useEffect(() => {
+      disabledRef.current = disabled
+    }, [disabled])
 
     const setImageUploading = useCallback((uploadId: string) => {
       const editorInstance = editorRef.current
@@ -253,12 +270,13 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
     const startUpload = useCallback(
       async (uploadId: string, file: File) => {
         setImageUploading(uploadId)
-        if (!onImageUpload) {
+        const uploadFn = onImageUploadRef.current
+        if (!uploadFn) {
           setImageError(uploadId)
-          return
+          return false
         }
         try {
-          const result = await onImageUpload(file)
+          const result = await uploadFn(file)
           handleUploadResult(uploadId, result)
           pendingFiles.current.delete(uploadId)
           const blob = blobUrls.current.get(uploadId)
@@ -266,11 +284,13 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             URL.revokeObjectURL(blob)
             blobUrls.current.delete(uploadId)
           }
+          return true
         } catch {
           setImageError(uploadId)
+          return false
         }
       },
-      [handleUploadResult, onImageUpload, setImageError, setImageUploading],
+      [handleUploadResult, setImageError, setImageUploading],
     )
 
     const insertImageFile = useCallback(
@@ -284,6 +304,7 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
         pendingFiles.current.set(uploadId, file)
         blobUrls.current.set(uploadId, blobUrl)
 
+        const shouldDefer = Boolean(deferredUpload)
         editorInstance
           .chain()
           .focus()
@@ -293,15 +314,17 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
               src: blobUrl,
               alt: file.name,
               uploadId,
-              uploading: true,
+              uploading: !shouldDefer,
               error: false,
             },
           })
           .run()
 
-        void startUpload(uploadId, file)
+        if (!shouldDefer) {
+          void startUpload(uploadId, file)
+        }
       },
-      [startUpload],
+      [deferredUpload, startUpload],
     )
 
     const retryUpload = useCallback(
@@ -349,6 +372,9 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             class: 'rich-editor__content',
           },
           handlePaste: (_view: EditorView, event: ClipboardEvent) => {
+            if (disabledRef.current) {
+              return false
+            }
             const items = Array.from(event.clipboardData?.items ?? [])
             const files = items
               .filter((item) => item.kind === 'file')
@@ -363,6 +389,9 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
             return true
           },
           handleDrop: (_view: EditorView, event: DragEvent) => {
+            if (disabledRef.current) {
+              return false
+            }
             const files = Array.from(event.dataTransfer?.files ?? []).filter((file) =>
               file.type.startsWith('image/'),
             )
@@ -374,18 +403,27 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
           },
         },
         editable: !disabled,
+        shouldRerenderOnTransaction: true,
         onUpdate: ({ editor }: { editor: Editor }) => {
           const json = editor.getJSON()
           const text = editor.getText()
-          onChange({ json, text })
+          lastContentRef.current = JSON.stringify(json ?? {})
+          onChangeRef.current({ json, text })
         },
       },
-      [disabled, insertImageFile, onChange, placeholder, removeImageByUploadId, retryUpload],
+      [insertImageFile, placeholder, removeImageByUploadId, retryUpload],
     )
 
     useEffect(() => {
       editorRef.current = editor
     }, [editor])
+
+    useEffect(() => {
+      if (!editor) {
+        return
+      }
+      editor.setEditable(!disabled)
+    }, [editor, disabled])
 
     useEffect(() => {
       if (!editor) {
@@ -409,8 +447,23 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
         setContent: (json: JSONContent | null) => {
           editor?.commands.setContent(json ?? '', false)
         },
+        flushUploads: async () => {
+          const editorInstance = editorRef.current
+          if (!editorInstance) {
+            return { json: value.json ?? null, failed: false }
+          }
+          const entries = Array.from(pendingFiles.current.entries())
+          if (entries.length === 0) {
+            return { json: editorInstance.getJSON(), failed: false }
+          }
+          const results = await Promise.all(
+            entries.map(([uploadId, file]) => startUpload(uploadId, file)),
+          )
+          const failed = results.some((item) => !item)
+          return { json: editorInstance.getJSON(), failed }
+        },
       }),
-      [editor],
+      [editor, startUpload, value.json],
     )
 
     const handleSetLink = () => {
@@ -430,10 +483,17 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
     }
 
     const handleImageButton = () => {
+      if (disabledRef.current || !onImageUploadRef.current) {
+        return
+      }
       fileInputRef.current?.click()
     }
 
     const handleImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+      if (disabledRef.current || !onImageUploadRef.current) {
+        event.target.value = ''
+        return
+      }
       const files = Array.from(event.target.files ?? []).filter((file) =>
         file.type.startsWith('image/'),
       )
@@ -441,107 +501,185 @@ const RichEditor = forwardRef<RichEditorHandle, RichEditorProps>(
       files.forEach(insertImageFile)
     }
 
-    const toolbarButtons = useMemo(
-      () => [
-        {
-          label: 'B',
-          title: 'Bold',
-          action: () => editor?.chain().focus().toggleBold().run(),
-          active: editor?.isActive('bold'),
-        },
-        {
-          label: 'I',
-          title: 'Italic',
-          action: () => editor?.chain().focus().toggleItalic().run(),
-          active: editor?.isActive('italic'),
-        },
-        {
-          label: 'S',
-          title: 'Strike',
-          action: () => editor?.chain().focus().toggleStrike().run(),
-          active: editor?.isActive('strike'),
-        },
-        {
-          label: 'H2',
-          title: 'Heading 2',
-          action: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
-          active: editor?.isActive('heading', { level: 2 }),
-        },
-        {
-          label: 'H3',
-          title: 'Heading 3',
-          action: () => editor?.chain().focus().toggleHeading({ level: 3 }).run(),
-          active: editor?.isActive('heading', { level: 3 }),
-        },
-        {
-          label: 'Quote',
-          title: 'Blockquote',
-          action: () => editor?.chain().focus().toggleBlockquote().run(),
-          active: editor?.isActive('blockquote'),
-        },
-        {
-          label: 'UL',
-          title: 'Bullet List',
-          action: () => editor?.chain().focus().toggleBulletList().run(),
-          active: editor?.isActive('bulletList'),
-        },
-        {
-          label: 'OL',
-          title: 'Ordered List',
-          action: () => editor?.chain().focus().toggleOrderedList().run(),
-          active: editor?.isActive('orderedList'),
-        },
-        {
-          label: '</>',
-          title: 'Inline Code',
-          action: () => editor?.chain().focus().toggleCode().run(),
-          active: editor?.isActive('code'),
-        },
-        {
-          label: '{ }',
-          title: 'Code Block',
-          action: () => editor?.chain().focus().toggleCodeBlock().run(),
-          active: editor?.isActive('codeBlock'),
-        },
-      ],
-      [editor],
-    )
+    const handleToolMouseDown = (event: MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+    }
+
+    const can = editor?.can()
+
+    const toolbarButtons = [
+      {
+        label: 'B',
+        title: 'Bold',
+        action: () => editor?.chain().focus().toggleBold().run(),
+        active: Boolean(editor?.isActive('bold')),
+        disabled: Boolean(disabled || !can?.toggleBold()),
+      },
+      {
+        label: 'I',
+        title: 'Italic',
+        action: () => editor?.chain().focus().toggleItalic().run(),
+        active: Boolean(editor?.isActive('italic')),
+        disabled: Boolean(disabled || !can?.toggleItalic()),
+      },
+      {
+        label: 'S',
+        title: 'Strike',
+        action: () => editor?.chain().focus().toggleStrike().run(),
+        active: Boolean(editor?.isActive('strike')),
+        disabled: Boolean(disabled || !can?.toggleStrike()),
+      },
+      {
+        label: 'H2',
+        title: 'Heading 2',
+        action: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
+        active: Boolean(editor?.isActive('heading', { level: 2 })),
+        disabled: Boolean(disabled || !can?.toggleHeading({ level: 2 })),
+      },
+      {
+        label: 'H3',
+        title: 'Heading 3',
+        action: () => editor?.chain().focus().toggleHeading({ level: 3 }).run(),
+        active: Boolean(editor?.isActive('heading', { level: 3 })),
+        disabled: Boolean(disabled || !can?.toggleHeading({ level: 3 })),
+      },
+      {
+        label: 'Quote',
+        title: 'Blockquote',
+        action: () => editor?.chain().focus().toggleBlockquote().run(),
+        active: Boolean(editor?.isActive('blockquote')),
+        disabled: Boolean(disabled || !can?.toggleBlockquote()),
+      },
+      {
+        label: 'UL',
+        title: 'Bullet List',
+        action: () => editor?.chain().focus().toggleBulletList().run(),
+        active: Boolean(editor?.isActive('bulletList')),
+        disabled: Boolean(disabled || !can?.toggleBulletList()),
+      },
+      {
+        label: 'OL',
+        title: 'Ordered List',
+        action: () => editor?.chain().focus().toggleOrderedList().run(),
+        active: Boolean(editor?.isActive('orderedList')),
+        disabled: Boolean(disabled || !can?.toggleOrderedList()),
+      },
+      {
+        label: '</>',
+        title: 'Inline Code',
+        action: () => editor?.chain().focus().toggleCode().run(),
+        active: Boolean(editor?.isActive('code')),
+        disabled: Boolean(disabled || !can?.toggleCode()),
+      },
+      {
+        label: '{ }',
+        title: 'Code Block',
+        action: () => editor?.chain().focus().toggleCodeBlock().run(),
+        active: Boolean(editor?.isActive('codeBlock')),
+        disabled: Boolean(disabled || !can?.toggleCodeBlock()),
+      },
+    ]
 
     return (
       <div className={`rich-editor ${disabled ? 'is-disabled' : ''}`}>
         <div className="rich-editor__toolbar">
-          {toolbarButtons.map((button) => (
+          <div className="rich-editor__toolbar-group">
+            {toolbarButtons.slice(0, 3).map((button) => (
+              <button
+                key={button.title}
+                type="button"
+                className={
+                  button.active ? 'rich-editor__tool is-active' : 'rich-editor__tool'
+                }
+                onMouseDown={handleToolMouseDown}
+                onClick={button.action}
+                title={button.title}
+                disabled={button.disabled}
+                aria-pressed={button.active}
+              >
+                <span className="rich-editor__tool-label">{button.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="rich-editor__toolbar-group">
+            {toolbarButtons.slice(3, 6).map((button) => (
+              <button
+                key={button.title}
+                type="button"
+                className={
+                  button.active ? 'rich-editor__tool is-active' : 'rich-editor__tool'
+                }
+                onMouseDown={handleToolMouseDown}
+                onClick={button.action}
+                title={button.title}
+                disabled={button.disabled}
+                aria-pressed={button.active}
+              >
+                <span className="rich-editor__tool-label">{button.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="rich-editor__toolbar-group">
+            {toolbarButtons.slice(6, 8).map((button) => (
+              <button
+                key={button.title}
+                type="button"
+                className={
+                  button.active ? 'rich-editor__tool is-active' : 'rich-editor__tool'
+                }
+                onMouseDown={handleToolMouseDown}
+                onClick={button.action}
+                title={button.title}
+                disabled={button.disabled}
+                aria-pressed={button.active}
+              >
+                <span className="rich-editor__tool-label">{button.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="rich-editor__toolbar-group">
+            {toolbarButtons.slice(8).map((button) => (
+              <button
+                key={button.title}
+                type="button"
+                className={
+                  button.active ? 'rich-editor__tool is-active' : 'rich-editor__tool'
+                }
+                onMouseDown={handleToolMouseDown}
+                onClick={button.action}
+                title={button.title}
+                disabled={button.disabled}
+                aria-pressed={button.active}
+              >
+                <span className="rich-editor__tool-label">{button.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="rich-editor__toolbar-group">
             <button
-              key={button.title}
               type="button"
               className={
-                button.active ? 'rich-editor__tool is-active' : 'rich-editor__tool'
+                editor?.isActive('link') ? 'rich-editor__tool is-active' : 'rich-editor__tool'
               }
-              onClick={button.action}
-              title={button.title}
+              onMouseDown={handleToolMouseDown}
+              onClick={handleSetLink}
+              title="Insert link"
               disabled={disabled}
+              aria-pressed={editor?.isActive('link') ?? false}
             >
-              {button.label}
+              <span className="rich-editor__tool-label">Link</span>
             </button>
-          ))}
-          <button
-            type="button"
-            className={editor?.isActive('link') ? 'rich-editor__tool is-active' : 'rich-editor__tool'}
-            onClick={handleSetLink}
-            title="Insert link"
-            disabled={disabled}
-          >
-            Link
-          </button>
-          <button
-            type="button"
-            className="rich-editor__tool"
-            onClick={handleImageButton}
-            title="Insert image"
-            disabled={disabled}
-          >
-            Image
-          </button>
+            <button
+              type="button"
+              className="rich-editor__tool rich-editor__tool--wide"
+              onMouseDown={handleToolMouseDown}
+              onClick={handleImageButton}
+              title="Insert image"
+              disabled={disabled || !onImageUploadRef.current}
+            >
+              <span className="rich-editor__tool-label">Image</span>
+            </button>
+          </div>
           <input
             ref={fileInputRef}
             className="rich-editor__file"
